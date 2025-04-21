@@ -30,6 +30,7 @@ use tauri::{
 use tokio::sync::{Mutex, RwLock};
 
 use std::collections::HashMap;
+use crate::wrapper::ConnectOptions;
 
 #[derive(Default)]
 pub struct DbInstances(pub RwLock<HashMap<String, DbPool>>);
@@ -150,7 +151,7 @@ impl Builder {
                     let mut lock = instances.0.write().await;
 
                     for db in config.preload {
-                        let pool = DbPool::connect(&db, app).await?;
+                        let pool = DbPool::connect(app, &ConnectOptions::from_url(db.clone())).await?;
 
                         if let Some(migrations) =
                             self.migrations.as_mut().and_then(|mm| mm.remove(&db))

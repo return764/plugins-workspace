@@ -8,15 +8,17 @@ use sqlx::migrate::Migrator;
 use tauri::{command, AppHandle, Runtime, State};
 
 use crate::{DbInstances, DbPool, Error, LastInsertId, Migrations};
+use crate::wrapper::ConnectOptions;
 
 #[command]
 pub(crate) async fn load<R: Runtime>(
     app: AppHandle<R>,
     db_instances: State<'_, DbInstances>,
     migrations: State<'_, Migrations>,
-    db: String,
+    options: ConnectOptions
 ) -> Result<String, crate::Error> {
-    let pool = DbPool::connect(&db, &app).await?;
+    let db= options.db_url.clone().to_string();
+    let pool = DbPool::connect(&app, &options).await?;
 
     if let Some(migrations) = migrations.0.lock().await.remove(&db) {
         let migrator = Migrator::new(migrations).await?;

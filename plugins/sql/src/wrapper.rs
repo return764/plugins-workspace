@@ -4,7 +4,7 @@
 
 #[cfg(feature = "sqlite")]
 use std::fs::create_dir_all;
-
+use std::str::FromStr;
 use indexmap::IndexMap;
 use serde_json::Value as JsonValue;
 #[cfg(any(feature = "sqlite", feature = "mysql", feature = "postgres"))]
@@ -15,12 +15,33 @@ use tauri::{AppHandle, Runtime};
 
 #[cfg(feature = "mysql")]
 use sqlx::MySql;
+#[cfg(feature = "mysql")]
+use sqlx::mysql::MySqlConnectOptions;
 #[cfg(feature = "postgres")]
 use sqlx::Postgres;
+#[cfg(feature = "postgres")]
+use sqlx::postgres::PgConnectOptions;
 #[cfg(feature = "sqlite")]
 use sqlx::Sqlite;
-
+#[cfg(feature = "sqlite")]
+use sqlx::sqlite::SqliteConnectOptions;
 use crate::LastInsertId;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ConnectOptions {
+    pub db_url: String,
+    extension: Option<String>
+}
+
+impl ConnectOptions {
+    pub fn from_url(db_url: String) -> Self {
+        Self {
+            db_url,
+            extension: None
+        }
+    }
+}
 
 pub enum DbPool {
     #[cfg(feature = "sqlite")]
@@ -66,9 +87,10 @@ pub enum DbPool {
 // private methods
 impl DbPool {
     pub(crate) async fn connect<R: Runtime>(
-        conn_url: &str,
         _app: &AppHandle<R>,
+        options: &ConnectOptions
     ) -> Result<Self, crate::Error> {
+        let conn_url = &options.db_url;
         match conn_url
             .split_once(':')
             .ok_or_else(|| crate::Error::InvalidDbUrl(conn_url.to_string()))?
@@ -88,21 +110,29 @@ impl DbPool {
                 if !Sqlite::database_exists(conn_url).await.unwrap_or(false) {
                     Sqlite::create_database(conn_url).await?;
                 }
-                Ok(Self::Sqlite(Pool::connect(conn_url).await?))
+
+                let mut connect_options = SqliteConnectOptions::from_str(conn_url.as_str())?;
+                if let Some(extension) = &options.extension {
+                    connect_options = connect_options.extension(extension);
+                }
+
+                Ok(Self::Sqlite(Pool::connect_with(connect_options).await?))
             }
             #[cfg(feature = "mysql")]
             "mysql" => {
                 if !MySql::database_exists(conn_url).await.unwrap_or(false) {
                     MySql::create_database(conn_url).await?;
                 }
-                Ok(Self::MySql(Pool::connect(conn_url).await?))
+
+                Ok(Self::MySql(Pool::connect_with(MySqlConnectOptions::from_str(conn_url)?).await?))
             }
             #[cfg(feature = "postgres")]
             "postgres" => {
                 if !Postgres::database_exists(conn_url).await.unwrap_or(false) {
                     Postgres::create_database(conn_url).await?;
                 }
-                Ok(Self::Postgres(Pool::connect(conn_url).await?))
+
+                Ok(Self::Postgres(Pool::connect_with(PgConnectOptions::from_str(conn_url)?).await?))
             }
             #[cfg(not(any(feature = "sqlite", feature = "postgres", feature = "mysql")))]
             _ => Err(crate::Error::InvalidDbUrl(format!(
