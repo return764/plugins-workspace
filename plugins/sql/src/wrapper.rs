@@ -113,7 +113,7 @@ impl DbPool {
 
                 let mut connect_options = SqliteConnectOptions::from_str(conn_url.as_str())?;
                 if let Some(extension) = &options.extension {
-                    connect_options = connect_options.extension(extension);
+                    connect_options = connect_options.extension(extension.clone());
                 }
 
                 Ok(Self::Sqlite(Pool::connect_with(connect_options).await?))

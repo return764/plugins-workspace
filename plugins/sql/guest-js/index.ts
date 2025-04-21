@@ -18,6 +18,11 @@ export interface QueryResult {
   lastInsertId?: number
 }
 
+export interface SqlOptions {
+  db_url: string,
+  extension: string,
+}
+
 /**
  * **Database**
  *
@@ -42,12 +47,15 @@ export default class Database {
    *
    * @example
    * ```ts
-   * const db = await Database.load("sqlite:test.db");
+   * const db = await Database.load({
+   *   db_url: "sqlite:test.db",
+   *   extension: ""
+   * });
    * ```
    */
-  static async load(path: string): Promise<Database> {
+  static async load(options: SqlOptions): Promise<Database> {
     const _path = await invoke<string>('plugin:sql|load', {
-      db: path
+      options: options
     })
 
     return new Database(_path)
